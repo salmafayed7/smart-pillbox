@@ -129,6 +129,7 @@ begin
   assert public.t_fails(format('insert into schedules (patient_id, compartment_id, start_date, end_date, med_time) values (%s, %s, current_date, current_date - 1, ''09:00'')', pid1, comp)), 'end before start should fail';
   reset role;
 
+  select count(*) into n from schedules;
   perform public.t_as(c2);                       -- 'view' caregiver
   assert (select count(*) from prescriptions) = 1, 'view caregiver should read prescriptions';
   assert public.t_fails(format('insert into prescriptions (patient_id) values (%s)', pid1)), 'view caregiver should not insert';
@@ -136,7 +137,7 @@ begin
   delete from schedules;
   reset role;
   assert (select pill_count from compartments where id = comp) = 20, 'view caregiver changed a compartment';
-  assert (select count(*) from schedules) = 1, 'view caregiver deleted a schedule';
+  assert (select count(*) from schedules) = n, 'view caregiver deleted a schedule';
 
   perform public.t_as(c3);                       -- pending caregiver
   assert (select count(*) from prescriptions) = 0, 'pending caregiver reads prescriptions';
