@@ -1,0 +1,112 @@
+{
+  "info": {
+    "name": "SmartPillbox scan-prescription",
+    "description": "Variables needed in your environment: base_url (e.g. http://127.0.0.1:54321), anon_key, access_token (a user who can manage the patient), viewer_access_token (View only user), patient_id, test_image_base64 (base64 of a JPEG under 2 MB, no data: prefix).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Scan prescription (manager) - 200",
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('status is 200', () => pm.response.to.have.status(200));",
+          "const b = pm.response.json();",
+          "pm.test('medicines is a non-empty array', () => pm.expect(b.medicines).to.be.an('array').that.is.not.empty);",
+          "pm.test('every medicine has a name and the agreed fields', () => b.medicines.forEach(m => {",
+          "  pm.expect(m.name).to.be.a('string').that.is.not.empty;",
+          "  ['dose','frequency','duration','schedule','tablets_per_dose','form','notes','times_per_day','duration_days'].forEach(k => pm.expect(m).to.have.property(k));",
+          "}));",
+          "pm.test('failed_pages is an array', () => pm.expect(b.failed_pages).to.be.an('array'));"
+        ] }
+      }],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "apikey", "value": "{{anon_key}}" },
+          { "key": "Authorization", "value": "Bearer {{access_token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"patient_id\": \"{{patient_id}}\",\n  \"images\": [\"{{test_image_base64}}\"]\n}" },
+        "url": "{{base_url}}/functions/v1/scan-prescription"
+      }
+    },
+    {
+      "name": "No token - 401",
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('status is 401', () => pm.response.to.have.status(401));"
+        ] }
+      }],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "apikey", "value": "{{anon_key}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"patient_id\": \"{{patient_id}}\",\n  \"images\": [\"{{test_image_base64}}\"]\n}" },
+        "url": "{{base_url}}/functions/v1/scan-prescription"
+      }
+    },
+    {
+      "name": "No images - 400",
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('status is 400', () => pm.response.to.have.status(400));",
+          "pm.test('error code is bad_request', () => pm.expect(pm.response.json().error).to.eql('bad_request'));"
+        ] }
+      }],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "apikey", "value": "{{anon_key}}" },
+          { "key": "Authorization", "value": "Bearer {{access_token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"patient_id\": \"{{patient_id}}\",\n  \"images\": []\n}" },
+        "url": "{{base_url}}/functions/v1/scan-prescription"
+      }
+    },
+    {
+      "name": "Not an image - 400",
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('status is 400', () => pm.response.to.have.status(400));"
+        ] }
+      }],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "apikey", "value": "{{anon_key}}" },
+          { "key": "Authorization", "value": "Bearer {{access_token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"patient_id\": \"{{patient_id}}\",\n  \"images\": [\"aGVsbG8gdGhpcyBpcyBub3QgYW4gaW1hZ2U=\"]\n}" },
+        "url": "{{base_url}}/functions/v1/scan-prescription"
+      }
+    },
+    {
+      "name": "View only caregiver - 403",
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('status is 403', () => pm.response.to.have.status(403));",
+          "pm.test('error code is forbidden', () => pm.expect(pm.response.json().error).to.eql('forbidden'));"
+        ] }
+      }],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "apikey", "value": "{{anon_key}}" },
+          { "key": "Authorization", "value": "Bearer {{viewer_access_token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"patient_id\": \"{{patient_id}}\",\n  \"images\": [\"{{test_image_base64}}\"]\n}" },
+        "url": "{{base_url}}/functions/v1/scan-prescription"
+      }
+    }
+  ]
+}

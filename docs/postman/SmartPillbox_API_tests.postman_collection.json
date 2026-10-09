@@ -128,7 +128,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"signup succeeded and returned a session\", function () { pm.expect(pm.response.code).to.equal(200); const j = pm.response.json(); pm.expect(j.access_token, 'no access_token: is Confirm email off?').to.be.a('string'); pm.collectionVariables.set('manager_token', j.access_token); });"
+                  "pm.test(\"signup succeeded and returned a session\", function () { pm.expect(pm.response.code).to.equal(200); const j = pm.response.json(); pm.expect(j.access_token, 'no access_token: is Confirm email off?').to.be.a('string'); pm.collectionVariables.set('manager_token', j.access_token); pm.environment.set('access_token', j.access_token); });"
                 ]
               }
             }
@@ -165,7 +165,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"signup succeeded and returned a session\", function () { pm.expect(pm.response.code).to.equal(200); const j = pm.response.json(); pm.expect(j.access_token, 'no access_token: is Confirm email off?').to.be.a('string'); pm.collectionVariables.set('viewer_token', j.access_token); });"
+                  "pm.test(\"signup succeeded and returned a session\", function () { pm.expect(pm.response.code).to.equal(200); const j = pm.response.json(); pm.expect(j.access_token, 'no access_token: is Confirm email off?').to.be.a('string'); pm.collectionVariables.set('viewer_token', j.access_token); pm.environment.set('viewer_access_token', j.access_token); });"
                 ]
               }
             }
@@ -330,7 +330,7 @@
                 "value": "Bearer {{patient_token}}"
               }
             ],
-            "url": "{{base_url}}/rest/v1/patients?select=id,name,email,link_code,timezone"
+            "url": "{{base_url}}/rest/v1/patients?select=id,name,email,timezone"
           },
           "event": [
             {
@@ -338,7 +338,43 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"one row, 8-character link code, Cairo time zone\", function () { const rows = pm.response.json(); pm.expect(pm.response.code).to.equal(200); pm.expect(rows.length).to.equal(1); pm.expect(rows[0].link_code).to.have.lengthOf(8); pm.expect(rows[0].timezone).to.equal('Africa/Cairo'); pm.expect(rows[0].email).to.include('@test.com'); pm.collectionVariables.set('patient_id', rows[0].id); pm.collectionVariables.set('link_code', rows[0].link_code); });"
+                  "pm.test(\"one row, Cairo time zone\", function () { const rows = pm.response.json(); pm.expect(pm.response.code).to.equal(200); pm.expect(rows.length).to.equal(1); pm.expect(rows[0].timezone).to.equal('Africa/Cairo'); pm.expect(rows[0].email).to.include('@test.com'); pm.collectionVariables.set('patient_id', rows[0].id); pm.environment.set('patient_id', rows[0].id); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patient reads own link code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patient_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{base_url}}/rest/v1/rpc/my_link_code"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"patient gets an 8-character link code\", function () { pm.expect(pm.response.code).to.equal(200); const code = pm.response.json(); pm.expect(code).to.be.a('string').with.lengthOf(8); pm.collectionVariables.set('link_code', code); });"
                 ]
               }
             }
@@ -600,7 +636,7 @@
         {
           "name": "Patient re-reads link code (should have rotated)",
           "request": {
-            "method": "GET",
+            "method": "POST",
             "header": [
               {
                 "key": "apikey",
@@ -609,9 +645,17 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{patient_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
               }
             ],
-            "url": "{{base_url}}/rest/v1/patients?select=link_code"
+            "url": "{{base_url}}/rest/v1/rpc/my_link_code",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
           },
           "event": [
             {
@@ -619,7 +663,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"code changed after approval\", function () { const code = pm.response.json()[0].link_code; pm.expect(code).to.not.equal(pm.collectionVariables.get('link_code')); pm.collectionVariables.set('link_code', code); });"
+                  "pm.test(\"code changed after approval\", function () { const code = pm.response.json(); pm.expect(code).to.not.equal(pm.collectionVariables.get('link_code')); pm.collectionVariables.set('link_code', code); });"
                 ]
               }
             }
@@ -689,6 +733,34 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"exactly the linked patient\", function () { const rows = pm.response.json(); pm.expect(rows.length).to.equal(1); pm.expect(rows[0].name).to.equal('Run Patient'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Caregiver cannot read the link code",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/patients?select=link_code"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"refused: link_code is only for the patient\", function () { pm.expect(pm.response.code).to.be.oneOf([401, 403]); });"
                 ]
               }
             }
