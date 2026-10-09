@@ -1,0 +1,1525 @@
+{
+  "info": {
+    "_postman_id": "0302adcf-e4a0-4566-9ef5-257bdd8ba2f8",
+    "name": "SmartPillbox API tests",
+    "description": "Runs the signup, linking, permission and box-pairing checks against the Supabase API. Select the 'SmartPillbox Local' environment, paste the anon/publishable key into anon_key, then Run collection. Each run creates new test users, so it can be repeated without resetting the database. Run `supabase db reset` to clear them.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Seed account smoke test (optional, needs supabase db reset)",
+      "item": [
+        {
+          "name": "Log in as the seeded patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/auth/v1/token?grant_type=password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"patient@test.com\",\n  \"password\": \"Test12345!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"seed login works\", function () { pm.expect(pm.response.code).to.equal(200); pm.expect(pm.response.json().access_token).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Signup",
+      "item": [
+        {
+          "name": "Sign up patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/auth/v1/signup",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"pat{{run}}@test.com\",\n  \"password\": \"Test12345!\",\n  \"data\": {\n    \"role\": \"patient\",\n    \"name\": \"Run Patient\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('run', Date.now().toString().slice(-8));  // new emails on every run"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"signup succeeded and returned a session\", function () { pm.expect(pm.response.code).to.equal(200); const j = pm.response.json(); pm.expect(j.access_token, 'no access_token: is Confirm email off?').to.be.a('string'); pm.collectionVariables.set('patient_token', j.access_token); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sign up caregiver (will get Can manage)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/auth/v1/signup",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"man{{run}}@test.com\",\n  \"password\": \"Test12345!\",\n  \"data\": {\n    \"role\": \"caregiver\",\n    \"name\": \"Care Manager\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"signup succeeded and returned a session\", function () { pm.expect(pm.response.code).to.equal(200); const j = pm.response.json(); pm.expect(j.access_token, 'no access_token: is Confirm email off?').to.be.a('string'); pm.collectionVariables.set('manager_token', j.access_token); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sign up caregiver (will get View only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/auth/v1/signup",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"view{{run}}@test.com\",\n  \"password\": \"Test12345!\",\n  \"data\": {\n    \"role\": \"caregiver\",\n    \"name\": \"Care Viewer\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"signup succeeded and returned a session\", function () { pm.expect(pm.response.code).to.equal(200); const j = pm.response.json(); pm.expect(j.access_token, 'no access_token: is Confirm email off?').to.be.a('string'); pm.collectionVariables.set('viewer_token', j.access_token); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject: no role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/auth/v1/signup",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"bad{{run}}512@test.com\",\n  \"password\": \"Test12345!\",\n  \"data\": {\n    \"name\": \"No Role\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"signup without a role is rejected\", function () { pm.expect(pm.response.code).to.be.above(399); pm.expect(pm.response.json().access_token).to.equal(undefined); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject: invalid role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/auth/v1/signup",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"bad{{run}}152@test.com\",\n  \"password\": \"Test12345!\",\n  \"data\": {\n    \"role\": \"admin\",\n    \"name\": \"Hacker\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"signup with role admin is rejected\", function () { pm.expect(pm.response.code).to.be.above(399); pm.expect(pm.response.json().access_token).to.equal(undefined); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject: no name",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/auth/v1/signup",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"bad{{run}}137@test.com\",\n  \"password\": \"Test12345!\",\n  \"data\": {\n    \"role\": \"patient\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"signup without a name is rejected\", function () { pm.expect(pm.response.code).to.be.above(399); pm.expect(pm.response.json().access_token).to.equal(undefined); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Access without login",
+      "item": [
+        {
+          "name": "Anonymous cannot read patients",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/patients?select=id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"anonymous request is blocked\", function () { pm.expect(pm.response.code).to.be.oneOf([401, 403]); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Patient basics",
+      "item": [
+        {
+          "name": "Patient reads own row",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patient_token}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/patients?select=id,name,email,link_code,timezone"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"one row, 8-character link code, Cairo time zone\", function () { const rows = pm.response.json(); pm.expect(pm.response.code).to.equal(200); pm.expect(rows.length).to.equal(1); pm.expect(rows[0].link_code).to.have.lengthOf(8); pm.expect(rows[0].timezone).to.equal('Africa/Cairo'); pm.expect(rows[0].email).to.include('@test.com'); pm.collectionVariables.set('patient_id', rows[0].id); pm.collectionVariables.set('link_code', rows[0].link_code); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Linking and code rotation",
+      "item": [
+        {
+          "name": "Caregiver requests link with the code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/rpc/request_patient_link",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"p_code\": \"{{link_code}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"request accepted\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Caregiver tries a wrong code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/rpc/request_patient_link",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"p_code\": \"WRONG123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"wrong code is rejected with 'invalid code'\", function () { pm.expect(pm.response.code).to.equal(400); pm.expect(pm.response.text()).to.include('invalid code'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Caregiver sees the link as pending",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/caregiver_patients?select=id,status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"one pending link\", function () { const rows = pm.response.json(); pm.expect(rows.length).to.equal(1); pm.expect(rows[0].status).to.equal('pending'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Caregiver cannot see the patient yet",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/patients?select=id,name"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"empty list before approval\", function () { pm.expect(pm.response.json().length).to.equal(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Second caregiver requests link (same code, not rotated yet)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewer_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/rpc/request_patient_link",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"p_code\": \"{{link_code}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"request accepted\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patient lists pending requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patient_token}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/caregiver_patients?select=id,status&status=eq.pending&order=id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"two pending requests; first is the manager, second the viewer\", function () { const rows = pm.response.json(); pm.expect(rows.length).to.equal(2); pm.collectionVariables.set('link_manage_id', rows[0].id); pm.collectionVariables.set('link_view_id', rows[1].id); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patient approves first caregiver: Can manage",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patient_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/rpc/respond_to_link",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"p_link_id\": {{link_manage_id}},\n  \"p_accept\": true,\n  \"p_access_level\": \"manage\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"approved\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patient re-reads link code (should have rotated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patient_token}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/patients?select=link_code"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"code changed after approval\", function () { const code = pm.response.json()[0].link_code; pm.expect(code).to.not.equal(pm.collectionVariables.get('link_code')); pm.collectionVariables.set('link_code', code); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patient approves second caregiver: View only",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patient_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/rpc/respond_to_link",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"p_link_id\": {{link_view_id}},\n  \"p_accept\": true,\n  \"p_access_level\": \"view\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"approved\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Caregiver now sees the patient",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/patients?select=id,name"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"exactly the linked patient\", function () { const rows = pm.response.json(); pm.expect(rows.length).to.equal(1); pm.expect(rows[0].name).to.equal('Run Patient'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Caregiver cannot approve their own link",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/rpc/respond_to_link",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"p_link_id\": {{link_manage_id}},\n  \"p_accept\": true,\n  \"p_access_level\": \"manage\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"rejected\", function () { pm.expect(pm.response.code).to.be.above(399); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Caregiver with Can manage writes for the patient",
+      "item": [
+        {
+          "name": "Create a prescription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/prescriptions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patient_id\": {{patient_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"created\", function () { pm.expect(pm.response.code).to.equal(201); pm.collectionVariables.set('rx_id', pm.response.json()[0].id); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add a medicine",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/prescription_medicines",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prescription_id\": {{rx_id}},\n  \"patient_id\": {{patient_id}},\n  \"med_name\": \"Paracetamol\",\n  \"dosage\": \"500mg\",\n  \"frequency\": \"twice daily\",\n  \"duration\": \"5 days\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"created\", function () { pm.expect(pm.response.code).to.equal(201); pm.collectionVariables.set('med_id', pm.response.json()[0].id); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Put the medicine in slot 1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/compartments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patient_id\": {{patient_id}},\n  \"prescription_medicine_id\": {{med_id}},\n  \"slot_number\": 1,\n  \"pill_count\": 20\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"created\", function () { pm.expect(pm.response.code).to.equal(201); pm.collectionVariables.set('comp_id', pm.response.json()[0].id); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add a dose time",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/schedules",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patient_id\": {{patient_id}},\n  \"compartment_id\": {{comp_id}},\n  \"start_date\": \"{{today}}\",\n  \"end_date\": \"{{end}}\",\n  \"med_time\": \"08:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const iso = d => d.toISOString().slice(0, 10);",
+                  "pm.collectionVariables.set('today', iso(new Date()));",
+                  "pm.collectionVariables.set('end', iso(new Date(Date.now() + 7 * 864e5)));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"created\", function () { pm.expect(pm.response.code).to.equal(201); pm.collectionVariables.set('sched_id', pm.response.json()[0].id); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cannot attach to a different patient id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/prescriptions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patient_id\": 999999\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"blocked\", function () { pm.expect(pm.response.code).to.be.oneOf([401, 403]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patient sees what the caregiver added",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patient_token}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/prescription_medicines?select=med_name,dosage"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Paracetamol is visible to the patient\", function () { pm.expect(pm.response.json().map(r => r.med_name)).to.include('Paracetamol'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patient sees the activity log",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patient_token}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/change_log?select=actor_name,actor_role,table_name,action&order=created_at.desc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"caregiver's changes are logged by name\", function () { const rows = pm.response.json(); pm.expect(rows.some(r => r.actor_name === 'Care Manager' && r.table_name === 'prescription_medicines')).to.equal(true); pm.expect(rows.some(r => r.actor_name === 'Care Manager' && r.table_name === 'schedules')).to.equal(true); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Caregiver with View only",
+      "item": [
+        {
+          "name": "Viewer can read medicines",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/prescription_medicines?select=med_name"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"sees Paracetamol\", function () { pm.expect(pm.response.json().map(r => r.med_name)).to.include('Paracetamol'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Viewer cannot add a medicine",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewer_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/prescription_medicines",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prescription_id\": {{rx_id}},\n  \"patient_id\": {{patient_id}},\n  \"med_name\": \"Sneaky\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"blocked by row-level security\", function () { pm.expect(pm.response.code).to.be.oneOf([401, 403]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Viewer cannot delete a schedule",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewer_token}}"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/schedules?id=eq.{{sched_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"nothing deleted\", function () { pm.expect(pm.response.json().length).to.equal(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Viewer cannot change a pill count",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewer_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/compartments?id=eq.{{comp_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pill_count\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"nothing changed\", function () { pm.expect(pm.response.json().length).to.equal(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Viewer cannot pair a box",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewer_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/rpc/pair_device",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"p_patient_id\": {{patient_id}},\n  \"p_code\": \"PB-DEMO0001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"rejected with 'not allowed'\", function () { pm.expect(pm.response.code).to.equal(400); pm.expect(pm.response.text()).to.include('not allowed'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Slot is still at 20 pills (checked as the patient)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patient_token}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/compartments?select=pill_count&id=eq.{{comp_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"pill count unchanged\", function () { pm.expect(pm.response.json()[0].pill_count).to.equal(20); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. Box pairing (needs the seed box PB-DEMO0001, free)",
+      "item": [
+        {
+          "name": "Caregiver (Can manage) pairs the box",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/rpc/pair_device",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"p_patient_id\": {{patient_id}},\n  \"p_code\": \"pb-demo0001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"paired (lower case accepted)\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patient sees the paired box",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patient_token}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/devices?select=device_code,paired_at"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"one box\", function () { const rows = pm.response.json(); pm.expect(rows.length).to.equal(1); pm.expect(rows[0].device_code).to.equal('PB-DEMO0001'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown box code is rejected",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{manager_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/rpc/pair_device",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"p_patient_id\": {{patient_id}},\n  \"p_code\": \"PB-NOPE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"rejected\", function () { pm.expect(pm.response.code).to.equal(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patient unpairs the box (frees it for the next run)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patient_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/rpc/unpair_device",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"p_patient_id\": {{patient_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"unpaired\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "8. New code and removing a caregiver",
+      "item": [
+        {
+          "name": "Patient gets a new link code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patient_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/rpc/regenerate_link_code",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"a different 8-character code\", function () { const c = pm.response.json(); pm.expect(c).to.have.lengthOf(8); pm.expect(c).to.not.equal(pm.collectionVariables.get('link_code')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patient removes the View only caregiver",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{patient_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/rpc/remove_link",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"p_link_id\": {{link_view_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"removed\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Removed caregiver has no access any more",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewer_token}}"
+              }
+            ],
+            "url": "{{base_url}}/rest/v1/prescription_medicines?select=med_name"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"empty list\", function () { pm.expect(pm.response.json().length).to.equal(0); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
