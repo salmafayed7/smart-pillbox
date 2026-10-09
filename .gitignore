@@ -1,0 +1,7 @@
+# Secrets (OpenRouter key for the Edge Function)
+supabase/functions/.env
+
+# Supabase CLI local state (holds local keys) and Studio scratch queries
+supabase/.temp/
+supabase/.branches/
+supabase/snippets/
