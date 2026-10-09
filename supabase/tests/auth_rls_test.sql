@@ -74,10 +74,11 @@ begin
   assert public.t_fails($q$ update patients set link_code = 'HACKED' $q$), 'patient should not edit link_code';
   assert public.t_fails(format('select respond_to_link(%s, true, ''admin'')', l1)), 'invalid access level should fail';
   perform respond_to_link(l1, true, 'manage');
-  select link_code into code2 from patients where id = pid1;
+  select my_link_code() into code2;
   assert code2 <> code, 'code should rotate after accept';
+  assert length(code2) = 8, 'patient can read their own 8-character link code';
   perform respond_to_link(l2, true, 'view');
-  select link_code into code3 from patients where id = pid1;
+  select my_link_code() into code3;
   assert code3 <> code2, 'code should rotate after second accept';
   reset role;
 
@@ -89,7 +90,7 @@ begin
 
   perform public.t_as(p1);
   perform respond_to_link(l3, false);
-  select link_code into code4 from patients where id = pid1;
+  select my_link_code() into code4;
   assert code4 <> code3, 'code should rotate after reject';
   assert (select status from caregiver_patients where id = l3) = 'rejected', 'link should be rejected';
   reset role;
@@ -104,6 +105,9 @@ begin
   perform public.t_as(c1);
   select count(*), min(name) into n, nm from patients;
   assert n = 1 and nm = 'Patient One', 'accepted caregiver should see exactly patient 1';
+  assert public.t_fails('select link_code from patients'), 'accepted caregiver must not read link_code';
+  assert public.t_fails('select * from patients'), 'select * on patients should be refused (link_code is not readable)';
+  assert my_link_code() is null, 'caregiver gets no link code from my_link_code()';
   assert (select count(*) from caregivers) = 1, 'caregiver should only see themselves';
   reset role;
   perform public.t_as(c3);
@@ -188,7 +192,7 @@ begin
 
   ---------------------------------------------------------------- remove / regenerate
   perform public.t_as(p1);
-  select link_code into code from patients where id = pid1;
+  select my_link_code() into code;
   assert regenerate_link_code() <> code, 'regenerate should change the code';
   perform remove_link(l2);                       -- patient removes the view caregiver
   reset role;
